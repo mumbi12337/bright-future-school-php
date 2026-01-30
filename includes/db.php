@@ -1,24 +1,31 @@
 <?php
-// Load .env variables if available
-if (file_exists(__DIR__ . '/../.env')) {
-    $lines = file(__DIR__ . '/../.env', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-    foreach ($lines as $line) {
-        if (strpos(trim($line), '#') === 0) continue;
-        [$key, $value] = explode('=', $line, 2);
-        $_ENV[$key] = trim($value);
-    }
-}
+// includes/db.php
 
-// Database configuration using environment variables
-define('DB_HOST', $_ENV['DB_HOST'] ?? '127.0.0.1');
-define('DB_PORT', $_ENV['DB_PORT'] ?? '5432');
-define('DB_NAME', $_ENV['DB_NAME'] ?? 'bright');
-define('DB_USER', $_ENV['DB_USER'] ?? 'postgres');
-define('DB_PASS', $_ENV['DB_PASS'] ?? '');
+// 1. Check if we are on Railway by looking for the DATABASE_URL environment variable
+$databaseUrl = getenv('DATABASE_URL');
+
+if ($databaseUrl) {
+    // --- RAILWAY CONFIGURATION ---
+    $url = parse_url($databaseUrl);
+    
+    define('DB_HOST', $url['host']);
+    define('DB_PORT', $url['port']);
+    define('DB_NAME', ltrim($url['path'], '/'));
+    define('DB_USER', $url['user']);
+    define('DB_PASS', $url['pass']);
+} else {
+    // --- LOCAL CONFIGURATION (Laragon) ---
+    define('DB_HOST', '127.0.0.1');
+    define('DB_PORT', '5432');
+    define('DB_NAME', 'bright');
+    define('DB_USER', 'postgres');
+    define('DB_PASS', 'icecream');
+}
 
 global $pdo;
 
 try {
+    // Create PDO connection using the defined constants
     $pdo = new PDO(
         "pgsql:host=" . DB_HOST . ";port=" . DB_PORT . ";dbname=" . DB_NAME,
         DB_USER,
@@ -30,10 +37,11 @@ try {
         ]
     );
 } catch (PDOException $e) {
+    // On Railway, if this fails, check your "Variables" tab
     die("Connection failed: " . $e->getMessage());
 }
 
 // Start session if not already started
-if (session_status() === PHP_SESSION_NONE) {
+if (session_status() == PHP_SESSION_NONE) {
     session_start();
 }

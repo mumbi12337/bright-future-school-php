@@ -1,0 +1,10 @@
+{
+    "name": "my/school-project",
+    "description": "Bright Future School Project",
+    "require": {
+        "php": "^8.2",
+        "ext-pdo": "*",
+        "ext-pdo_pgsql": "*",
+        "ext-pgsql": "*"
+    }
+}
