@@ -1,43 +1,26 @@
 <?php
-require_once dirname(__DIR__) . '/includes/db.php';
-
-echo "Starting database migration...\n";
+// 1. Include the database connection we set up earlier
+require_once(__DIR__ . '/../includes/db.php');
 
 try {
-    // Read the SQL schema file
-    $sql = file_get_contents(dirname(__FILE__) . '/schema.sql');
-    
-    if ($sql === false) {
-        throw new Exception("Could not read schema.sql file");
+    echo "Starting migration...<br>";
+
+    // 2. Point to your schema file
+    $schemaFile = __DIR__ . '/schema.sql';
+
+    if (!file_exists($schemaFile)) {
+        die("Error: schema.sql not found at " . $schemaFile);
     }
-    
-    // Execute the SQL
+
+    // 3. Read the SQL content
+    $sql = file_get_contents($schemaFile);
+
+    // 4. Execute the SQL against the Railway Postgres DB
     $pdo->exec($sql);
-    
-    echo "Database schema created successfully!\n";
-    
-    // Insert default admin user if users table is empty
-    try {
-        $stmt = $pdo->query("SELECT COUNT(*) FROM users WHERE role = 'ADMIN'");
-        $adminCount = $stmt->fetchColumn();
-        
-        if ($adminCount == 0) {
-            // Insert default admin user with hashed password
-            $defaultPassword = password_hash('admin123', PASSWORD_DEFAULT);
-            $insertAdmin = "INSERT INTO users (email, password, role) VALUES ('admin@school.edu', ?, 'ADMIN')";
-            $stmt = $pdo->prepare($insertAdmin);
-            $stmt->execute([$defaultPassword]);
-            
-            echo "Default admin user created:\n";
-            echo "  Email: admin@school.edu\n";
-            echo "  Password: admin123\n";
-        }
-    } catch (Exception $e) {
-        echo "Note: Could not insert default admin user (table may not exist yet): " . $e->getMessage() . "\n";
-    }
-    
-    echo "Migration completed successfully!\n";
-} catch (Exception $e) {
-    echo "Error during migration: " . $e->getMessage() . "\n";
+
+    echo "<b>Success!</b> Your database tables have been created.<br>";
+    echo "<a href='../index.php'>Go to Homepage</a>";
+
+} catch (PDOException $e) {
+    echo "<b>Migration Failed:</b> " . $e->getMessage();
 }
-?>
