@@ -180,7 +180,12 @@ if (!$student) {
                 <?php 
                 $studentModel = new Student();
                 $feeStatus = $studentModel->getFeeStatus($student['id']);
-                $paidTerms = array_filter($feeStatus, function($fee) { return $fee['paid']; });
+                // Normalize PostgreSQL 't'/'f' to PHP booleans
+                foreach ($feeStatus as &$fee) {
+                    $fee['paid'] = ($fee['paid'] === true || $fee['paid'] === 't' || $fee['paid'] == 1);
+                }
+                unset($fee);
+                $paidTerms = array_filter($feeStatus, function($fee) { return $fee['paid'] === true; });
                 echo count($paidTerms) . ' of 3 terms paid';
                 if (count($paidTerms) >= 3) {
                   echo ' - Ready for promotion';

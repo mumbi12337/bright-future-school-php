@@ -17,7 +17,14 @@ class StudentFee extends BaseModel {
         }
         
         $stmt = $this->pdo->prepare("
-            SELECT sf.*, 
+            SELECT sf.id,
+                   sf.student_id,
+                   sf.fee_id,
+                   sf.term,
+                   sf.academic_year,
+                   sf.amount,
+                   CASE WHEN sf.paid = TRUE THEN 1 ELSE 0 END as paid,
+                   sf.payment_date,
                    s.first_name, 
                    s.last_name, 
                    s.grade,
@@ -78,6 +85,7 @@ class StudentFee extends BaseModel {
     
     /**
      * Check if student has paid all fees for current academic year
+     * Counts distinct terms that are paid — immune to duplicate rows
      */
     public function hasPaidAllFees($studentId, $academicYear = null) {
         if (!$academicYear) {
@@ -87,21 +95,35 @@ class StudentFee extends BaseModel {
             $academicYear = $student['academic_year'] ?? date('Y');
         }
         
+        // Count distinct terms that have at least one paid record
         $stmt = $this->pdo->prepare("
-            SELECT COUNT(*) as unpaid_count
+            SELECT COUNT(DISTINCT term) as paid_terms
             FROM {$this->table}
-            WHERE student_id = ? AND academic_year = ? AND paid = FALSE
+            WHERE student_id = ? AND academic_year = ? AND paid = TRUE
         ");
         $stmt->execute([$studentId, $academicYear]);
         $result = $stmt->fetch();
         
-        return $result['unpaid_count'] == 0;
+        // All 3 terms must be paid
+        return (int)$result['paid_terms'] === 3;
+    }
+    
+    /**
+     * Delete all fee records for a student in a given academic year
+     * Used before promotion to ensure a clean slate
+     */
+    public function clearFeesForYear($studentId, $academicYear) {
+        $stmt = $this->pdo->prepare("
+            DELETE FROM {$this->table}
+            WHERE student_id = ? AND academic_year = ?
+        ");
+        return $stmt->execute([$studentId, $academicYear]);
     }
     
     /**
      * Create student fees for academic year
      */
-    public function createStudentFees($studentId, $academicYear = null, $amount = 500.00, $gradeName = null) {
+    public function createStudentFees($studentId, $academicYear = null, $amount = 0.00, $gradeName = null) {
         if (!$academicYear) {
             $studentStmt = $this->pdo->prepare("SELECT academic_year FROM students WHERE id = ?");
             $studentStmt->execute([$studentId]);
@@ -149,12 +171,16 @@ class StudentFee extends BaseModel {
         
         // Create fees for all 3 terms
         for ($term = 1; $term <= 3; $term++) {
+            // The fees table stores term as "Term 1", "Term 2", "Term 3" (VARCHAR)
+            // while student_fees.term is an INTEGER (1, 2, 3)
+            $termLabel = "Term {$term}";
+            
             // Try to get specific fee for this term
             $feeStmt = $this->pdo->prepare("
                 SELECT id, amount FROM fees 
                 WHERE grade_id = ? AND term = ?
             ");
-            $feeStmt->execute([$grade['id'], $term]);
+            $feeStmt->execute([$grade['id'], $termLabel]);
             $fee = $feeStmt->fetch();
             
             $feeId = $fee ? $fee['id'] : null;

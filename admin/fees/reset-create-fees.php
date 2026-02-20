@@ -1,5 +1,6 @@
 <?php
 require_once '../../includes/Auth.php';
+require_once '../../includes/db.php';
 require_once '../../models/Student.php';
 require_once '../../models/StudentFee.php';
 
@@ -29,35 +30,25 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 try {
     $studentModel = new Student();
     $studentFeeModel = new StudentFee();
-    
-    // Get all students
+
+    // Delete ALL student fee records (paid and unpaid) to start fresh
+    // This clears duplicates and wrong amounts completely
+    $deleteStmt = $pdo->prepare("DELETE FROM student_fees");
+    $deleteStmt->execute();
+    $deletedCount = $deleteStmt->rowCount();
+
+    // Get all students and recreate their fees from the fee structure
     $students = $studentModel->findAll();
-    
-    if (empty($students)) {
-        echo json_encode([
-            'success' => false,
-            'message' => 'No students found in the system'
-        ]);
-        exit;
-    }
-    
+
     $createdCount = 0;
     $skippedCount = 0;
     $errors = [];
-    
+
     foreach ($students as $student) {
         try {
-            // Check if student already has fees for current academic year
-            $existingFees = $studentFeeModel->getStudentFeeStatus($student['id']);
-            
-            if (empty($existingFees)) {
-                // Create fees for this student
-                $created = $studentFeeModel->createStudentFees($student['id']);
-                if ($created) {
-                    $createdCount++;
-                } else {
-                    $skippedCount++;
-                }
+            $created = $studentFeeModel->createStudentFees($student['id']);
+            if ($created) {
+                $createdCount++;
             } else {
                 $skippedCount++;
             }
@@ -65,31 +56,34 @@ try {
             $errors[] = "Student ID {$student['id']}: " . $e->getMessage();
         }
     }
-    
-    $message = "Successfully created fee records for {$createdCount} students.";
+
+    $message = "Reset complete. Cleared {$deletedCount} old fee record(s). "
+             . "Recreated fees for {$createdCount} student(s) from the current fee structure.";
+
     if ($skippedCount > 0) {
-        $message .= " Skipped {$skippedCount} students (already had fees or errors).";
+        $message .= " Skipped {$skippedCount} student(s) (no matching fee structure for their grade).";
     }
-    
+
     if (!empty($errors)) {
-        $message .= " Encountered " . count($errors) . " errors.";
+        $message .= " Encountered " . count($errors) . " error(s): " . implode(', ', $errors);
     }
-    
+
     echo json_encode([
         'success' => true,
         'message' => $message,
         'data' => [
-            'created' => $createdCount,
-            'skipped' => $skippedCount,
-            'errors' => $errors
+            'deleted'  => $deletedCount,
+            'created'  => $createdCount,
+            'skipped'  => $skippedCount,
+            'errors'   => $errors
         ]
     ]);
-    
+
 } catch (Exception $e) {
     http_response_code(500);
     echo json_encode([
         'success' => false,
-        'message' => 'Error creating student fees: ' . $e->getMessage()
+        'message' => 'Error resetting student fees: ' . $e->getMessage()
     ]);
 }
 ?>

@@ -142,8 +142,12 @@ public function processFeePayment($studentId, $term) {
                 );
                 $updateStmt->execute([$nextGrade, $newAcademicYear, $studentId]);
                 
+                // Clear any stale/leftover fee records for the new year before creating fresh ones
+                // This ensures promoted students always have all 3 terms unpaid in the new grade
+                $studentFeeModel->clearFeesForYear($studentId, $newAcademicYear);
+                
                 // Create fee records for the NEW grade in the NEW year
-                $studentFeeModel->createStudentFees($studentId, $newAcademicYear, 500.00, $nextGrade);
+                $studentFeeModel->createStudentFees($studentId, $newAcademicYear, 0.00, $nextGrade);
                 
                 $progressionResult['grade_promoted'] = true;
                 $progressionResult['new_grade']      = $nextGrade;

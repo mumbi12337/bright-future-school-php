@@ -56,9 +56,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     
                 case 'create_student_fees':
                     $studentId = $_POST['student_id'];
-                    $amount = $_POST['amount'] ?? 500.00;
                     
-                    $created = $studentFeeModel->createStudentFees($studentId, null, $amount);
+                    $created = $studentFeeModel->createStudentFees($studentId);
                     if ($created) {
                         $notification = "
                             <div class='notification notification-success' style='margin-bottom: 1rem; padding: 1rem; border-radius: 0.5rem; background: linear-gradient(135deg, #10b981, #059669); color: white;'>
@@ -148,6 +147,12 @@ ob_start();
                     </svg>
                     Create All Student Fees
                 </button>
+                <button id="resetFeesBtn" class="btn" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.75rem 1.5rem; background: linear-gradient(135deg, #f59e0b, #d97706); color: white;">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 16px; height: 16px;">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    Reset &amp; Recreate Fees
+                </button>
             </div>
         </div>
 
@@ -208,13 +213,22 @@ ob_start();
                     <?php foreach ($students as $student):
                         // Build a keyed map of fee records by term number
                         $feeStatus  = $studentModel->getFeeStatus($student['id']);
+                        
+                        // Normalize PostgreSQL boolean ('t'/'f') to PHP boolean
+                        // PDO+PostgreSQL returns booleans as 't' or 'f' strings;
+                        // in PHP, 'f' is truthy (non-empty string), so we must cast explicitly
+                        foreach ($feeStatus as &$f) {
+                            $f['paid'] = ($f['paid'] === true || $f['paid'] === 't' || $f['paid'] == 1);
+                        }
+                        unset($f);
+                        
                         $feeByTerm  = [];
                         foreach ($feeStatus as $f) {
                             $feeByTerm[(int)$f['term']] = $f;
                         }
                         $currentTerm   = (int)($student['current_term'] ?? 1);
                         $academicYear  = $student['academic_year'] ?? date('Y');
-                        $paidCount     = count(array_filter($feeStatus, fn($f) => $f['paid']));
+                        $paidCount     = count(array_filter($feeStatus, fn($f) => $f['paid'] === true));
                         $totalFees     = count($feeStatus);
                         // Next unpaid term (for the Pay button)
                         $nextUnpaid    = null;
@@ -241,7 +255,7 @@ ob_start();
                                     <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
                                         <?php for ($t = 1; $t <= 3; $t++):
                                             $termFee = $feeByTerm[$t] ?? null;
-                                            $isPaid  = $termFee && $termFee['paid'];
+                                            $isPaid  = $termFee && $termFee['paid'] === true;
                                             $amount  = $termFee ? number_format($termFee['amount'], 0) : '—';
                                         ?>
                                             <div style="
@@ -712,6 +726,53 @@ $content = ob_get_clean();
                 });
             }
         });
+
+        // Reset & Recreate Fees button
+        const resetFeesBtn = document.getElementById('resetFeesBtn');
+        if (resetFeesBtn) {
+            resetFeesBtn.addEventListener('click', function() {
+                if (confirm('⚠️ This will DELETE all unpaid fee records and recreate them from the current fee structure.\n\nPaid records will NOT be affected.\n\nContinue?')) {
+                    resetFeesBtn.disabled = true;
+                    resetFeesBtn.innerHTML = `
+                        <svg class="animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 16px; height: 16px; margin-right: 0.5rem;">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                        Resetting...
+                    `;
+
+                    fetch('reset-create-fees.php', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' }
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        resetFeesBtn.disabled = false;
+                        resetFeesBtn.innerHTML = `
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 16px; height: 16px; margin-right: 0.5rem;">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            </svg>
+                            Reset &amp; Recreate Fees
+                        `;
+                        if (data.success) {
+                            showNotification(data.message, 'success');
+                            setTimeout(() => { location.reload(); }, 2500);
+                        } else {
+                            showNotification(data.message || 'Failed to reset fees', 'error');
+                        }
+                    })
+                    .catch(error => {
+                        resetFeesBtn.disabled = false;
+                        resetFeesBtn.innerHTML = `
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 16px; height: 16px; margin-right: 0.5rem;">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            </svg>
+                            Reset &amp; Recreate Fees
+                        `;
+                        showNotification('Network error: ' + error.message, 'error');
+                    });
+                }
+            });
+        }
         
         // Simple notification function
         function showNotification(message, type) {
