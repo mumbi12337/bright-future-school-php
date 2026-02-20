@@ -15,8 +15,11 @@ $grades = $gradeModel->findAll();
 
 $message = '';
 $messageType = '';
+$fee = null;
 
+// Handle form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $feeId = $_POST['id'] ?? null;
     $gradeId = trim($_POST['grade_id'] ?? '');
     $term = trim($_POST['term'] ?? '');
     $amount = trim($_POST['amount'] ?? '');
@@ -27,31 +30,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         $feeModel = new Fee();
         
-        // Check if fee already exists for this grade and term
-        $existingFees = $feeModel->findBy(['grade_id' => $gradeId, 'term' => $term]);
-        $existingFee = !empty($existingFees) ? $existingFees[0] : false;
-        if ($existingFee) {
-            $message = 'Fee already exists for this grade and term.';
-            $messageType = 'error';
-        } else {
-            $result = $feeModel->create([
+        try {
+            $result = $feeModel->update($feeId, [
                 'grade_id' => $gradeId,
                 'term' => $term,
                 'amount' => floatval($amount)
             ]);
 
             if ($result) {
-                $message = 'Fee added successfully!';
+                $message = 'Fee updated successfully!';
                 $messageType = 'success';
-                // Redirect to fees list after successful creation
-                header('Location: fees.php');
+                // Redirect to fees list after successful update
+                header('Location: fees.php?message=' . urlencode($message));
                 exit;
             } else {
-                $message = 'Failed to add fee.';
+                $message = 'Failed to update fee.';
                 $messageType = 'error';
             }
+        } catch (Exception $e) {
+            $message = 'Error updating fee: ' . $e->getMessage();
+            $messageType = 'error';
         }
     }
+}
+
+// Load existing fee data
+if (isset($_GET['id'])) {
+    $feeId = $_GET['id'];
+    $feeModel = new Fee();
+    $fee = $feeModel->findById($feeId);
+    
+    if (!$fee) {
+        $message = 'Fee not found.';
+        $messageType = 'error';
+    }
+} else {
+    $message = 'No fee ID specified.';
+    $messageType = 'error';
 }
 ?>
 
@@ -60,7 +75,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Add New Fee - Admin Dashboard</title>
+    <title>Edit Fee - Admin Dashboard</title>
     <link rel="stylesheet" href="../../public/css/styles.css">
 </head>
 <body>
@@ -70,21 +85,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <div class="container">
             <div class="section-header" style="margin-bottom: 2rem;">
                 <h1 class="section-title">
-                    Add New
+                    Edit
                     <span class="gradient">Fee</span>
                 </h1>
                 <p class="section-description">
-                    Define fee structure for different grades and terms
+                    Update fee structure details
                 </p>
             </div>
-
-            <!-- Back Navigation -->
-            <a href="fees.php" style="display: inline-flex; align-items: center; gap: 0.5rem; color: var(--color-primary); text-decoration: none; margin-bottom: 1.5rem; font-size: 0.9rem; transition: opacity 0.2s;" onmouseover="this.style.opacity='0.7'" onmouseout="this.style.opacity='1'">
-                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 16px; height: 16px;">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                </svg>
-                ← Back to Fee Management
-            </a>
 
             <?php if ($message): ?>
                 <div class="notification notification-<?= $messageType ?>" style="margin-bottom: 2rem; padding: 1rem; border-radius: 0.5rem; background: <?= $messageType === 'success' ? 'linear-gradient(135deg, #10b981, #059669)' : 'linear-gradient(135deg, #ef4444, #dc2626)' ?>; color: white;">
@@ -101,14 +108,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
             <?php endif; ?>
 
+            <?php if ($fee): ?>
             <div class="card" style="max-width: 600px; margin: 0 auto; padding: 2rem;">
                 <form method="POST">
+                    <input type="hidden" name="id" value="<?= $fee['id'] ?>">
+                    
                     <div style="margin-bottom: 1.5rem;">
                         <label for="grade_id" style="display: block; margin-bottom: 0.5rem; color: white; font-weight: 500;">Grade</label>
                         <select id="grade_id" name="grade_id" required style="width: 100%; padding: 0.75rem; border-radius: 0.5rem; border: 1px solid var(--color-border); background: var(--color-surface); color: white;">
                             <option value="">Select Grade</option>
                             <?php foreach ($grades as $grade): ?>
-                                <option value="<?= $grade['id'] ?>" <?= (isset($_POST['grade_id']) && $_POST['grade_id'] == $grade['id']) ? 'selected' : '' ?>>
+                                <option value="<?= $grade['id'] ?>" <?= $fee['grade_id'] == $grade['id'] ? 'selected' : '' ?>>
                                     <?= htmlspecialchars($grade['name']) ?>
                                 </option>
                             <?php endforeach; ?>
@@ -119,23 +129,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <label for="term" style="display: block; margin-bottom: 0.5rem; color: white; font-weight: 500;">Term</label>
                         <select id="term" name="term" required style="width: 100%; padding: 0.75rem; border-radius: 0.5rem; border: 1px solid var(--color-border); background: var(--color-surface); color: white;">
                             <option value="">Select Term</option>
-                            <option value="Term 1" <?= (isset($_POST['term']) && $_POST['term'] == 'Term 1') ? 'selected' : '' ?>>Term 1</option>
-                            <option value="Term 2" <?= (isset($_POST['term']) && $_POST['term'] == 'Term 2') ? 'selected' : '' ?>>Term 2</option>
-                            <option value="Term 3" <?= (isset($_POST['term']) && $_POST['term'] == 'Term 3') ? 'selected' : '' ?>>Term 3</option>
+                            <option value="Term 1" <?= $fee['term'] == 'Term 1' ? 'selected' : '' ?>>Term 1</option>
+                            <option value="Term 2" <?= $fee['term'] == 'Term 2' ? 'selected' : '' ?>>Term 2</option>
+                            <option value="Term 3" <?= $fee['term'] == 'Term 3' ? 'selected' : '' ?>>Term 3</option>
                         </select>
                     </div>
 
                     <div style="margin-bottom: 2rem;">
                         <label for="amount" style="display: block; margin-bottom: 0.5rem; color: white; font-weight: 500;">Amount (K)</label>
-                        <input type="number" id="amount" name="amount" step="0.01" min="0" value="<?= htmlspecialchars($_POST['amount'] ?? '') ?>" required style="width: 100%; padding: 0.75rem; border-radius: 0.5rem; border: 1px solid var(--color-border); background: var(--color-surface); color: white;">
+                        <input type="number" id="amount" name="amount" step="0.01" min="0" value="<?= htmlspecialchars($fee['amount'] ?? '') ?>" required style="width: 100%; padding: 0.75rem; border-radius: 0.5rem; border: 1px solid var(--color-border); background: var(--color-surface); color: white;">
                     </div>
 
                     <div style="display: flex; gap: 1rem; justify-content: flex-end;">
                         <a href="fees.php" class="btn btn-secondary" style="text-decoration: none; padding: 0.75rem 1.5rem;">Cancel</a>
-                        <button type="submit" class="btn btn-primary" style="padding: 0.75rem 1.5rem;">Add Fee</button>
+                        <button type="submit" class="btn btn-primary" style="padding: 0.75rem 1.5rem;">Update Fee</button>
                     </div>
                 </form>
             </div>
+            <?php else: ?>
+                <div class="card" style="max-width: 600px; margin: 0 auto; padding: 2rem; text-align: center;">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 48px; height: 48px; margin: 0 auto 1rem; color: #ef4444;">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <h3 style="color: white; margin-bottom: 1rem;">Fee Not Found</h3>
+                    <p style="color: var(--color-text);">The fee you're trying to edit could not be found.</p>
+                    <a href="fees.php" class="btn btn-primary" style="display: inline-block; margin-top: 1rem; text-decoration: none; padding: 0.75rem 1.5rem;">Back to Fee Management</a>
+                </div>
+            <?php endif; ?>
         </div>
     </section>
 

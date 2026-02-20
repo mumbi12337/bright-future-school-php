@@ -49,31 +49,16 @@ class Fee extends BaseModel {
             return $this->update($existing['id'], $data);
         } else {
             // Create new fee
-            $data = [
+            return $this->create([
                 'grade_id' => $gradeId,
                 'amount' => $amount,
                 'term' => $term
-            ];
-            return $this->create($data);
+            ]);
         }
     }
     
     /**
-     * Get all fees with grade information
-     */
-    public function getAllFeesWithGrades() {
-        $stmt = $this->pdo->prepare("
-            SELECT f.*, g.name as grade_name
-            FROM {$this->table} f
-            JOIN grades g ON f.grade_id = g.id
-            ORDER BY g.name, f.term
-        ");
-        $stmt->execute();
-        return $stmt->fetchAll();
-    }
-    
-    /**
-     * Check if fee already exists for a grade (by name) and term
+     * Find fee by grade name and term
      */
     public function findByGradeNameAndTerm($gradeName, $term) {
         // First get the grade_id from the grades table
@@ -125,7 +110,7 @@ class Fee extends BaseModel {
             return [];
         }
         
-        // Then get the grade_id
+        // Get the grade_id
         $gradeStmt = $this->pdo->prepare("SELECT id FROM grades WHERE name = ?");
         $gradeStmt->execute([$student['grade']]);
         $grade = $gradeStmt->fetch();
@@ -134,20 +119,21 @@ class Fee extends BaseModel {
             return [];
         }
         
-        // Finally get fees for that grade
-        $stmt = $this->pdo->prepare(
-            "SELECT f.*, 
-                   g.name as grade_name,
-                   s.first_name,
-                   s.last_name
+        // Get fees for that grade
+        return $this->getByGradeId($grade['id']);
+    }
+    
+    /**
+     * Get all fees with grade names
+     */
+    public function findAllWithGradeNames() {
+        $stmt = $this->pdo->prepare("
+            SELECT f.*, g.name as grade_name
             FROM {$this->table} f
             JOIN grades g ON f.grade_id = g.id
-            JOIN students s ON s.grade = g.name
-            WHERE s.id = ?
-            ORDER BY f.term"
-        );
-        $stmt->execute([$studentId]);
+            ORDER BY g.name, f.term
+        ");
+        $stmt->execute();
         return $stmt->fetchAll();
     }
 }
-?>

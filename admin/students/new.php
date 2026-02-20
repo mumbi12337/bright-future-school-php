@@ -76,6 +76,14 @@ $currentUser = $auth->getCurrentUser();
         </p>
       </div>
 
+      <!-- Back Navigation -->
+      <a href="student.php" style="display: inline-flex; align-items: center; gap: 0.5rem; color: var(--color-primary); text-decoration: none; margin-bottom: 1.5rem; font-size: 0.9rem; transition: opacity 0.2s;" onmouseover="this.style.opacity='0.7'" onmouseout="this.style.opacity='1'">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 16px; height: 16px;">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+        </svg>
+        ← Back to Students
+      </a>
+
       <div class="card" style="max-width: 600px; margin: 0 auto; padding: 2rem;">
         <form id="add-student-form" action="../../api/students.php?action=create" method="POST" enctype="multipart/form-data" style="display: flex; flex-direction: column; gap: 1.5rem; width: 100%;">
           <div class="form-group">

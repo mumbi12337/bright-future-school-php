@@ -93,93 +93,84 @@ class Student extends BaseModel {
     }
     
     /**
-     * Process fee payment and handle term/grade progression
-     */
-    public function processFeePayment($studentId, $term) {
-        try {
-            $this->pdo->beginTransaction();
-            
-            // Get current student info
-            $student = $this->findById($studentId);
-            if (!$student) {
-                throw new Exception("Student not found");
-            }
-            
-            // Debug logging
-            error_log("processFeePayment - Student ID: {$studentId}, Term: {$term}, Current Grade: {$student['grade']}, Current Term: {$student['current_term']}, Academic Year: {$student['academic_year']}");
-            
-            $studentFeeModel = new StudentFee($this->pdo);
-            
-            // Mark fee as paid
-            $studentFeeModel->markAsPaid($studentId, $term, $student['academic_year']);
-            
-            // Check if all fees are paid for current grade
-            $allFeesPaid = $studentFeeModel->hasPaidAllFees($studentId, $student['academic_year']);
-            
-            // Debug logging
-            error_log("processFeePayment - All fees paid: " . ($allFeesPaid ? 'YES' : 'NO'));
-            
-            $progressionResult = [
-                'grade_promoted' => false,
-                'term_advanced' => false,
-                'new_grade' => $student['grade'],
-                'new_term' => $student['current_term'],
-                'message' => 'Fee payment recorded successfully'
-            ];
-            
-            // Check if all fees are paid for current grade for promotion
-            if ($allFeesPaid) {
-                $nextGrade = $this->getNextGrade($student['grade']);
-                
-                // Debug logging
-                error_log("processFeePayment - Next grade: " . ($nextGrade ? $nextGrade : 'NONE - Student graduated'));
-                
-                if ($nextGrade) {
-                    // Promote to next grade
-                    $updateStmt = $this->pdo->prepare(
-                        "UPDATE students SET grade = ?, current_term = 1, academic_year = academic_year + 1 WHERE id = ?"
-                    );
-                    $updateStmt->execute([$nextGrade, $studentId]);
-                    
-                    // Create new fee records for next academic year
-                    $studentFeeModel->createStudentFees($studentId, $student['academic_year'] + 1, 500.00);
-                    
-                    $progressionResult['grade_promoted'] = true;
-                    $progressionResult['new_grade'] = $nextGrade;
-                    $progressionResult['new_term'] = 1;
-                    $progressionResult['message'] = "Student promoted to {$nextGrade}, Term 1!";
-                } else {
-                    // Student has graduated - no more grades available
-                    $progressionResult['graduated'] = true;
-                    $progressionResult['message'] = "Congratulations! Student has graduated from the school.";
-                }
-            } else {
-                // Just advance term within current grade (only if current term < 3)
-                if ($student['current_term'] < 3) {
-                    $nextTerm = $student['current_term'] + 1;
-                    $updateStmt = $this->pdo->prepare(
-                        "UPDATE students SET current_term = ? WHERE id = ?"
-                    );
-                    $updateStmt->execute([$nextTerm, $studentId]);
-                    
-                    $progressionResult['term_advanced'] = true;
-                    $progressionResult['new_term'] = $nextTerm;
-                    $progressionResult['message'] = "Student advanced to Term {$nextTerm}";
-                } else {
-                    // If already at term 3 but not all fees paid, just record payment
-                    $progressionResult['message'] = "Fee payment recorded successfully";
-                }
-            }
-            
-            $this->pdo->commit();
-            return $progressionResult;
-            
-        } catch (Exception $e) {
-            $this->pdo->rollback();
-            throw $e;
+     // ... existing code ...
+/**
+ * Process fee payment and handle grade progression
+ */
+public function processFeePayment($studentId, $term) {
+    try {
+        // Get student details
+        $student = $this->findById($studentId);
+        if (!$student) {
+            throw new Exception("Student not found");
         }
+        
+        $studentFeeModel = new StudentFee(); // No PDO arg — uses global $pdo via BaseModel
+        
+        $academicYear = $student['academic_year'] ?? date('Y');
+        
+        // Mark the specific term's fee as paid
+        $studentFeeModel->markAsPaid($studentId, $term, $academicYear);
+        
+        // Advance the student's current term tracker
+        $newTerm = min(($student['current_term'] ?? 1) + 1, 3);
+        $updateTermStmt = $this->pdo->prepare("UPDATE students SET current_term = ? WHERE id = ?");
+        $updateTermStmt->execute([$newTerm, $studentId]);
+        
+        // Check if all fees are paid for current academic year
+        $allFeesPaid = $studentFeeModel->hasPaidAllFees($studentId, $academicYear);
+        
+        $progressionResult = [
+            'grade_promoted' => false,
+            'graduated'      => false,
+            'term_advanced'  => true,
+            'new_grade'      => $student['grade'],
+            'new_term'       => $newTerm,
+            'message'        => "Fee payment for Term {$term} recorded. Student is now on Term {$newTerm}."
+        ];
+        
+        // If all fees paid, promote the student to the next grade
+        if ($allFeesPaid) {
+            $nextGrade = $this->getNextGrade($student['grade']);
+            
+            if ($nextGrade) {
+                $newAcademicYear = $academicYear + 1;
+                
+                // Promote student first
+                $updateStmt = $this->pdo->prepare(
+                    "UPDATE students SET grade = ?, current_term = 1, academic_year = ? WHERE id = ?"
+                );
+                $updateStmt->execute([$nextGrade, $newAcademicYear, $studentId]);
+                
+                // Create fee records for the NEW grade in the NEW year
+                $studentFeeModel->createStudentFees($studentId, $newAcademicYear, 500.00, $nextGrade);
+                
+                $progressionResult['grade_promoted'] = true;
+                $progressionResult['new_grade']      = $nextGrade;
+                $progressionResult['new_term']       = 1;
+                $progressionResult['message']        = "All fees paid! Student has been promoted to {$nextGrade} (Year {$newAcademicYear})!";
+            } else {
+                // Student has completed the highest grade — graduated
+                $progressionResult['graduated'] = true;
+                $progressionResult['message']   = "Congratulations! Student has graduated from the school.";
+            }
+        }
+        
+        return $progressionResult;
+        
+    } catch (Exception $e) {
+        throw new Exception("Failed to process fee payment: " . $e->getMessage());
     }
-    
+}
+
+/**
+ * Get student fee status
+ */
+public function getFeeStatus($studentId, $academicYear = null) {
+    $studentFeeModel = new StudentFee(); // No-arg — uses global $pdo
+    return $studentFeeModel->getStudentFeeStatus($studentId, $academicYear);
+}
+// ... existing code ...
     /**
      * Get next grade in sequence (only if it exists in the system)
      */
@@ -227,25 +218,6 @@ class Student extends BaseModel {
         $stmt = $this->pdo->prepare("SELECT DISTINCT grade FROM students WHERE grade IS NOT NULL ORDER BY grade");
         $stmt->execute();
         return $stmt->fetchAll(PDO::FETCH_COLUMN);
-    }
-    
-    /**
-     * Get student's fee status
-     */
-    public function getFeeStatus($studentId, $academicYear = null) {
-        if (!$academicYear) {
-            $student = $this->findById($studentId);
-            $academicYear = $student['academic_year'] ?? date('Y');
-        }
-        
-        $stmt = $this->pdo->prepare(
-            "SELECT term, paid, payment_date, amount 
-             FROM student_fees 
-             WHERE student_id = ? AND academic_year = ? 
-             ORDER BY term"
-        );
-        $stmt->execute([$studentId, $academicYear]);
-        return $stmt->fetchAll();
     }
     
     /**

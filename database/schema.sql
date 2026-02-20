@@ -48,6 +48,8 @@ CREATE TABLE IF NOT EXISTS students (
     parent_email VARCHAR(255),
     parent_phone VARCHAR(20),
     photo_url VARCHAR(255),
+    current_term INTEGER DEFAULT 1,
+    academic_year INTEGER DEFAULT 2025,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     parent_id INTEGER REFERENCES parents(id) ON DELETE SET NULL
@@ -136,6 +138,34 @@ CREATE TABLE IF NOT EXISTS applications (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- ... existing code ...
+-- Fee table
+CREATE TABLE IF NOT EXISTS fees (
+    id SERIAL PRIMARY KEY,
+    grade_id INTEGER NOT NULL REFERENCES grades(id) ON DELETE CASCADE,
+    amount DECIMAL(10,2) NOT NULL,
+    term VARCHAR(50) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(grade_id, term)
+);
+
+-- Student Fees table
+CREATE TABLE IF NOT EXISTS student_fees (
+    id SERIAL PRIMARY KEY,
+    student_id INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+    fee_id INTEGER REFERENCES fees(id) ON DELETE SET NULL,
+    term INTEGER NOT NULL,
+    academic_year INTEGER NOT NULL,
+    amount DECIMAL(10,2) NOT NULL,
+    paid BOOLEAN DEFAULT FALSE,
+    payment_date TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(student_id, term, academic_year)
+);
+-- ... existing code ...
 
 -- Create indexes for better performance
 CREATE INDEX IF NOT EXISTS idx_students_parent_id ON students(parent_id);

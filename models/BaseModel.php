@@ -74,6 +74,11 @@ abstract class BaseModel {
      * Find records by conditions
      */
     public function findBy($conditions) {
+        if (empty($conditions)) {
+            // If no conditions, return all records
+            return $this->findAll();
+        }
+        
         $whereClause = [];
         $values = [];
         

@@ -98,13 +98,10 @@ foreach ($students as $student) {
         $fee['student_name'] = $student['first_name'] . ' ' . $student['last_name'];
         $fees[] = $fee;
     }
-}
-
-// Calculate statistics
+}// Calculate statistics
 $studentCount = count($students);
 $recentAttendanceRate = 0; // Placeholder calculation
 $avgGrade = 'A/B'; // Placeholder calculation
-
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -186,7 +183,7 @@ $avgGrade = 'A/B'; // Placeholder calculation
                   <path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                 </svg>
               </div>
-              <span style="color: var(--color-text); font-weight: 500; flex: 1;"><?= htmlspecialchars(($student['first_name'] ?? 'Unknown') . ' ' . ($student['last_name'] ?? 'Student')) ?> - Grade <?= htmlspecialchars($student['grade'] ?? 'Not Assigned') ?></span>
+              <span style="color: var(--color-text); font-weight: 500; flex: 1;"><?= htmlspecialchars($student['first_name'] . ' ' . $student['last_name']) ?> - Grade <?= htmlspecialchars($student['grade']) ?></span>
               <span style="color: var(--color-accent); font-weight: 500; background: rgba(96, 165, 250, 0.2); padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.875rem;">Active</span>
             </div>
             <?php endforeach; ?>
@@ -218,9 +215,9 @@ $avgGrade = 'A/B'; // Placeholder calculation
             <tbody>
               <?php foreach ($attendances as $attendance): ?>
               <tr style="border-bottom: 1px solid var(--color-border);">
-                <td style="padding: 0.75rem;"><?= htmlspecialchars($attendance['student_name'] ?? $attendance['first_name'] . ' ' . $attendance['last_name'] ?? 'Unknown Student') ?></td>
-                <td style="padding: 0.75rem;"><?= htmlspecialchars($attendance['student_grade'] ?? $attendance['grade'] ?? 'Unknown Grade') ?></td>
-                <td style="padding: 0.75rem; color: <?= ($attendance['status'] ?? 'ABSENT') === 'PRESENT' ? '#10b981' : '#ef4444'; ?>; font-weight: 500;"><?= htmlspecialchars($attendance['status'] ?? 'ABSENT') ?></td>
+                <td style="padding: 0.75rem;"><?= htmlspecialchars($attendance['student_name'] ?? 'Unknown') ?></td>
+                <td style="padding: 0.75rem;"><?= htmlspecialchars($attendance['student_grade'] ?? 'Unknown') ?></td>
+                <td style="padding: 0.75rem; color: <?= $attendance['status'] === 'PRESENT' ? '#10b981' : '#ef4444'; ?>; font-weight: 500;"><?= htmlspecialchars($attendance['status']) ?></td>
               </tr>
               <?php endforeach; ?>
               
@@ -248,11 +245,11 @@ $avgGrade = 'A/B'; // Placeholder calculation
                 </svg>
               </div>
               <div style="flex: 1;">
-                <div style="font-weight: 500; color: var(--color-text);"><?= htmlspecialchars($event['title'] ?? 'Untitled Event') ?></div>
-                <div style="font-size: 0.875rem; color: var(--color-muted); margin-top: 0.25rem;"><?= date('M j, Y', strtotime($event['event_date'] ?? 'now')) ?> • <?= htmlspecialchars($event['location'] ?? 'Location not specified') ?></div>
+                <div style="font-weight: 500; color: var(--color-text);"><?= htmlspecialchars($event['title']) ?></div>
+                <div style="font-size: 0.875rem; color: var(--color-muted); margin-top: 0.25rem;"><?= date('M j, Y', strtotime($event['event_date'])) ?> • <?= htmlspecialchars($event['location']) ?></div>
               </div>
               <span style="color: var(--color-accent); font-weight: 500; background: rgba(96, 165, 250, 0.2); padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.75rem;">
-                <?= htmlspecialchars($event['type'] ?? 'General') ?>
+                <?= htmlspecialchars($event['type']) ?>
               </span>
             </div>
             <?php endforeach; ?>
@@ -285,13 +282,13 @@ $avgGrade = 'A/B'; // Placeholder calculation
               <?php foreach ($pendingFees as $fee): ?>
               <tr style="border-bottom: 1px solid var(--color-border);">
                 <td style="padding: 0.75rem;">
-                  <?= htmlspecialchars($fee['student_name'] ?? $fee['first_name'] . ' ' . $fee['last_name'] ?? 'Unknown Student') ?>
+                  <?= htmlspecialchars($fee['student_name'] ?? 'Unknown Student') ?>
                 </td>
                 <td style="padding: 0.75rem;">
-                  <?= htmlspecialchars($fee['term'] ?? 'Unknown Term') ?>
+                  <?= htmlspecialchars($fee['term']) ?>
                 </td>
                 <td style="padding: 0.75rem; color: #ef4444; font-weight: 500;">
-                  K<?= number_format($fee['amount'] ?? 0, 2) ?>
+                  K<?= number_format($fee['amount'], 2) ?>
                 </td>
               </tr>
               <?php endforeach; ?>
@@ -322,9 +319,9 @@ $avgGrade = 'A/B'; // Placeholder calculation
             <tbody>
               <?php foreach ($grades as $grade): ?>
               <tr style="border-bottom: 1px solid var(--color-border);">
-                <td style="padding: 0.75rem;"><?= htmlspecialchars($grade['student_name'] ?? $grade['first_name'] . ' ' . $grade['last_name'] ?? 'Unknown Student') ?></td>
-                <td style="padding: 0.75rem;"><?= htmlspecialchars($grade['subject'] ?? 'Subject Not Specified') ?></td>
-                <td style="padding: 0.75rem; color: #10b981; font-weight: 500;"><?= htmlspecialchars($grade['grade'] ?? 'No Grade') ?></td>
+                <td style="padding: 0.75rem;"><?= htmlspecialchars($grade['student_name'] ?? 'Unknown') ?></td>
+                <td style="padding: 0.75rem;"><?= htmlspecialchars($grade['subject'] ?? 'Unknown') ?></td>
+                <td style="padding: 0.75rem; color: #10b981; font-weight: 500;"><?= htmlspecialchars($grade['grade']) ?></td>
               </tr>
               <?php endforeach; ?>
               
@@ -352,13 +349,20 @@ $avgGrade = 'A/B'; // Placeholder calculation
               <?php foreach ($fees as $fee): ?>
               <tr style="border-bottom: 1px solid var(--color-border);">
                 <td style="padding: 0.75rem;">
-                  <?= htmlspecialchars($fee['student_name'] ?? $fee['first_name'] . ' ' . $fee['last_name'] ?? 'Unknown Student') ?>
+                  <?php 
+                    $studentName = isset($fee['student_name']) ? 
+                      htmlspecialchars($fee['student_name']) : 
+                      (isset($fee['first_name']) && isset($fee['last_name']) ? 
+                        htmlspecialchars($fee['first_name'] . ' ' . $fee['last_name']) : 
+                        (isset($fee['student_id']) ? 'Student ' . $fee['student_id'] : 'Unknown'));
+                    echo $studentName;
+                  ?>
                 </td>
                 <td style="padding: 0.75rem;">
-                  <?= htmlspecialchars($fee['term'] ?? 'Unknown Term') ?>
+                  <?= htmlspecialchars($fee['term']) ?>
                 </td>
                 <td style="padding: 0.75rem; color: #10b981; font-weight: 500;">
-                  K<?= number_format($fee['amount'] ?? 0, 2) ?>
+                  K<?= number_format($fee['amount'], 2) ?>
                 </td>
               </tr>
               <?php endforeach; ?>
@@ -377,8 +381,7 @@ $avgGrade = 'A/B'; // Placeholder calculation
 
 
 
-
-  <script src="../public/js/main.js"></script>
+  <script src="/public/js/main.js"></script>
   <script>
     // Parent dashboard specific JavaScript
     document.addEventListener('DOMContentLoaded', function() {

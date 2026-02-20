@@ -179,6 +179,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </p>
       </div>
 
+      <!-- Back Navigation -->
+      <a href="events.php" style="display: inline-flex; align-items: center; gap: 0.5rem; color: var(--color-primary); text-decoration: none; margin-bottom: 1.5rem; font-size: 0.9rem; transition: opacity 0.2s;" onmouseover="this.style.opacity='0.7'" onmouseout="this.style.opacity='1'">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 16px; height: 16px;">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+        </svg>
+        ← Back to Events
+      </a>
+
       <?php if ($message): ?>
         <div class="notification notification-<?php echo $message_type; ?>" style="margin-bottom: 1rem; padding: 1rem; border-radius: 8px; background-color: <?php echo $message_type === 'success' ? '#10b981' : '#ef4444'; ?>; color: white;">
           <?php echo htmlspecialchars($message); ?>

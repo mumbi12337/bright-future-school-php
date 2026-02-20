@@ -21,10 +21,13 @@ class StudentFee extends BaseModel {
                    s.first_name, 
                    s.last_name, 
                    s.grade,
-                   g.name as grade_name
+                   g.name as grade_name,
+                   f.amount as fee_amount,
+                   f.term as fee_term
             FROM {$this->table} sf
             JOIN students s ON sf.student_id = s.id
             LEFT JOIN grades g ON s.grade = g.name
+            LEFT JOIN fees f ON sf.fee_id = f.id
             WHERE sf.student_id = ? AND sf.academic_year = ?
             ORDER BY sf.term
         ");
@@ -44,10 +47,9 @@ class StudentFee extends BaseModel {
         }
         
         $stmt = $this->pdo->prepare("
-            SELECT sf.*, g.name as grade_name
+            SELECT sf.*, f.amount as fee_amount, f.term as fee_term
             FROM {$this->table} sf
-            JOIN students s ON sf.student_id = s.id
-            LEFT JOIN grades g ON s.grade = g.name
+            LEFT JOIN fees f ON sf.fee_id = f.id
             WHERE sf.student_id = ? AND sf.academic_year = ? AND sf.paid = FALSE
             ORDER BY sf.term
         ");
@@ -75,7 +77,7 @@ class StudentFee extends BaseModel {
     }
     
     /**
-     * Check if student has paid all fees for current grade
+     * Check if student has paid all fees for current academic year
      */
     public function hasPaidAllFees($studentId, $academicYear = null) {
         if (!$academicYear) {
@@ -86,44 +88,20 @@ class StudentFee extends BaseModel {
         }
         
         $stmt = $this->pdo->prepare("
-            SELECT COUNT(*) as total_fees,
-                   SUM(CASE WHEN paid = TRUE THEN 1 ELSE 0 END) as paid_fees
+            SELECT COUNT(*) as unpaid_count
             FROM {$this->table}
-            WHERE student_id = ? AND academic_year = ?
+            WHERE student_id = ? AND academic_year = ? AND paid = FALSE
         ");
         $stmt->execute([$studentId, $academicYear]);
         $result = $stmt->fetch();
         
-        // Debug logging
-        error_log("hasPaidAllFees check - Student ID: {$studentId}, Academic Year: {$academicYear}, Total: {$result['total_fees']}, Paid: {$result['paid_fees']}");
-        
-        return $result && $result['total_fees'] > 0 && $result['paid_fees'] == $result['total_fees'];
+        return $result['unpaid_count'] == 0;
     }
     
     /**
-     * Get students ready for grade promotion (all fees paid)
+     * Create student fees for academic year
      */
-    public function getStudentsReadyForPromotion() {
-        $currentYear = date('Y');
-        
-        $stmt = $this->pdo->prepare("
-            SELECT s.id, s.first_name, s.last_name, s.grade, s.academic_year,
-                   COUNT(sf.id) as total_fees,
-                   SUM(CASE WHEN sf.paid = TRUE THEN 1 ELSE 0 END) as paid_fees
-            FROM students s
-            JOIN {$this->table} sf ON s.id = sf.student_id AND s.academic_year = sf.academic_year
-            WHERE s.academic_year = ?
-            GROUP BY s.id, s.first_name, s.last_name, s.grade, s.academic_year
-            HAVING COUNT(sf.id) > 0 AND SUM(CASE WHEN sf.paid = TRUE THEN 1 ELSE 0 END) = COUNT(sf.id)
-        ");
-        $stmt->execute([$currentYear]);
-        return $stmt->fetchAll();
-    }
-    
-    /**
-     * Create fee records for a student for all terms
-     */
-    public function createStudentFees($studentId, $academicYear = null, $amount = 500.00) {
+    public function createStudentFees($studentId, $academicYear = null, $amount = 500.00, $gradeName = null) {
         if (!$academicYear) {
             $studentStmt = $this->pdo->prepare("SELECT academic_year FROM students WHERE id = ?");
             $studentStmt->execute([$studentId]);
@@ -140,16 +118,53 @@ class StudentFee extends BaseModel {
         $existingCount = $checkStmt->fetchColumn();
         
         if ($existingCount > 0) {
-            return false; // Fees already exist
+            return false; // Fees already exist for this academic year
+        }
+        
+        // Get student's grade
+        if ($gradeName) {
+            // Use the provided grade name (for promotion scenarios)
+            $studentGrade = $gradeName;
+        } else {
+            // Get current grade from student record
+            $studentStmt = $this->pdo->prepare("SELECT grade FROM students WHERE id = ?");
+            $studentStmt->execute([$studentId]);
+            $student = $studentStmt->fetch();
+            
+            if (!$student) {
+                return false;
+            }
+            
+            $studentGrade = $student['grade'];
+        }
+        
+        // Get fee structure for student's grade
+        $gradeStmt = $this->pdo->prepare("SELECT id FROM grades WHERE name = ?");
+        $gradeStmt->execute([$studentGrade]);
+        $grade = $gradeStmt->fetch();
+        
+        if (!$grade) {
+            return false;
         }
         
         // Create fees for all 3 terms
         for ($term = 1; $term <= 3; $term++) {
-            $stmt = $this->pdo->prepare("
-                INSERT INTO {$this->table} (student_id, term, academic_year, amount, paid)
-                VALUES (?, ?, ?, ?, FALSE)
+            // Try to get specific fee for this term
+            $feeStmt = $this->pdo->prepare("
+                SELECT id, amount FROM fees 
+                WHERE grade_id = ? AND term = ?
             ");
-            $stmt->execute([$studentId, $term, $academicYear, $amount]);
+            $feeStmt->execute([$grade['id'], $term]);
+            $fee = $feeStmt->fetch();
+            
+            $feeId = $fee ? $fee['id'] : null;
+            $feeAmount = $fee ? $fee['amount'] : $amount;
+            
+            $stmt = $this->pdo->prepare("
+                INSERT INTO {$this->table} (student_id, fee_id, term, academic_year, amount, paid)
+                VALUES (?, ?, ?, ?, ?, FALSE)
+            ");
+            $stmt->execute([$studentId, $feeId, $term, $academicYear, $feeAmount]);
         }
         
         return true;
@@ -166,14 +181,15 @@ class StudentFee extends BaseModel {
         $stmt = $this->pdo->prepare("
             SELECT g.name as grade_name,
                    COUNT(DISTINCT s.id) as total_students,
-                   COUNT(sf.id) as total_fees,
-                   SUM(CASE WHEN sf.paid = TRUE THEN 1 ELSE 0 END) as paid_fees,
-                   SUM(CASE WHEN sf.paid = FALSE THEN 1 ELSE 0 END) as unpaid_fees,
-                   SUM(CASE WHEN sf.paid = TRUE THEN sf.amount ELSE 0 END) as collected_amount,
-                   SUM(CASE WHEN sf.paid = FALSE THEN sf.amount ELSE 0 END) as pending_amount
+                   COUNT(sf.id) as total_fee_records,
+                   SUM(CASE WHEN sf.paid = TRUE THEN sf.amount ELSE 0 END) as total_paid,
+                   SUM(CASE WHEN sf.paid = FALSE THEN sf.amount ELSE 0 END) as total_pending,
+                   COUNT(CASE WHEN sf.paid = TRUE THEN 1 END) as paid_count,
+                   COUNT(CASE WHEN sf.paid = FALSE THEN 1 END) as pending_count
             FROM grades g
-            LEFT JOIN students s ON g.name = s.grade AND s.academic_year = ?
-            LEFT JOIN {$this->table} sf ON s.id = sf.student_id AND s.academic_year = sf.academic_year
+            LEFT JOIN students s ON g.name = s.grade
+            LEFT JOIN {$this->table} sf ON s.id = sf.student_id AND sf.academic_year = ?
+            WHERE s.id IS NOT NULL
             GROUP BY g.name
             ORDER BY g.name
         ");
@@ -182,23 +198,39 @@ class StudentFee extends BaseModel {
     }
     
     /**
-     * Get overdue fees (unpaid fees from previous terms)
+     * Get students ready for promotion (all fees paid)
      */
-    public function getOverdueFees() {
-        $currentYear = date('Y');
+    public function getStudentsReadyForPromotion($academicYear = null) {
+        if (!$academicYear) {
+            $academicYear = date('Y');
+        }
         
         $stmt = $this->pdo->prepare("
-            SELECT s.first_name, s.last_name, s.grade,
-                   sf.term, sf.amount, sf.created_at,
-                   g.name as grade_name
+            SELECT s.*, 
+                   COUNT(sf.id) as total_fees,
+                   COUNT(CASE WHEN sf.paid = TRUE THEN 1 END) as paid_fees
             FROM students s
-            JOIN {$this->table} sf ON s.id = sf.student_id AND s.academic_year = sf.academic_year
-            LEFT JOIN grades g ON s.grade = g.name
-            WHERE sf.paid = FALSE AND sf.academic_year = ?
-            ORDER BY s.grade, s.last_name, s.first_name, sf.term
+            LEFT JOIN {$this->table} sf ON s.id = sf.student_id AND sf.academic_year = ?
+            WHERE s.academic_year = ?
+            GROUP BY s.id
+            HAVING COUNT(sf.id) = COUNT(CASE WHEN sf.paid = TRUE THEN 1 END) AND COUNT(sf.id) > 0
         ");
-        $stmt->execute([$currentYear]);
+        $stmt->execute([$academicYear, $academicYear]);
+        return $stmt->fetchAll();
+    }
+    
+    /**
+     * Get payment history for student
+     */
+    public function getPaymentHistory($studentId) {
+        $stmt = $this->pdo->prepare("
+            SELECT sf.*, f.term as fee_term, f.amount as fee_amount
+            FROM {$this->table} sf
+            LEFT JOIN fees f ON sf.fee_id = f.id
+            WHERE sf.student_id = ?
+            ORDER BY sf.academic_year DESC, sf.term
+        ");
+        $stmt->execute([$studentId]);
         return $stmt->fetchAll();
     }
 }
-?>

@@ -45,8 +45,14 @@ try {
                 break;
             }
             
+            // Process the payment
             $result = $studentModel->processFeePayment($input['student_id'], $input['term']);
-            echo json_encode(['success' => true, 'data' => $result]);
+            
+            echo json_encode([
+                'success' => true,
+                'message' => $result['message'],
+                'data' => $result
+            ]);
             break;
             
         case 'status':
@@ -57,13 +63,15 @@ try {
             }
             
             $studentId = $_GET['student_id'] ?? null;
+            $academicYear = $_GET['academic_year'] ?? null;
+            
             if (!$studentId) {
                 http_response_code(400);
                 echo json_encode(['success' => false, 'message' => 'Student ID is required']);
                 break;
             }
             
-            $status = $studentFeeModel->getStudentFeeStatus($studentId);
+            $status = $studentFeeModel->getStudentFeeStatus($studentId, $academicYear);
             echo json_encode(['success' => true, 'data' => $status]);
             break;
             
@@ -75,7 +83,15 @@ try {
             }
             
             $studentId = $_GET['student_id'] ?? null;
-            $unpaid = $studentFeeModel->getUnpaidFees($studentId);
+            $academicYear = $_GET['academic_year'] ?? null;
+            
+            if (!$studentId) {
+                http_response_code(400);
+                echo json_encode(['success' => false, 'message' => 'Student ID is required']);
+                break;
+            }
+            
+            $unpaid = $studentFeeModel->getUnpaidFees($studentId, $academicYear);
             echo json_encode(['success' => true, 'data' => $unpaid]);
             break;
             
@@ -86,19 +102,9 @@ try {
                 break;
             }
             
-            $summary = $studentFeeModel->getFeeSummaryByGrade();
+            $academicYear = $_GET['academic_year'] ?? null;
+            $summary = $studentFeeModel->getFeeSummaryByGrade($academicYear);
             echo json_encode(['success' => true, 'data' => $summary]);
-            break;
-            
-        case 'overdue':
-            if ($method !== 'GET') {
-                http_response_code(405);
-                echo json_encode(['success' => false, 'message' => 'Method not allowed']);
-                break;
-            }
-            
-            $overdue = $studentFeeModel->getOverdueFees();
-            echo json_encode(['success' => true, 'data' => $overdue]);
             break;
             
         case 'ready_for_promotion':
@@ -108,8 +114,28 @@ try {
                 break;
             }
             
-            $readyStudents = $studentFeeModel->getStudentsReadyForPromotion();
+            $academicYear = $_GET['academic_year'] ?? null;
+            $readyStudents = $studentFeeModel->getStudentsReadyForPromotion($academicYear);
             echo json_encode(['success' => true, 'data' => $readyStudents]);
+            break;
+            
+        case 'payment_history':
+            if ($method !== 'GET') {
+                http_response_code(405);
+                echo json_encode(['success' => false, 'message' => 'Method not allowed']);
+                break;
+            }
+            
+            $studentId = $_GET['student_id'] ?? null;
+            
+            if (!$studentId) {
+                http_response_code(400);
+                echo json_encode(['success' => false, 'message' => 'Student ID is required']);
+                break;
+            }
+            
+            $history = $studentFeeModel->getPaymentHistory($studentId);
+            echo json_encode(['success' => true, 'data' => $history]);
             break;
             
         case 'create_fees':
@@ -134,18 +160,16 @@ try {
             if ($created) {
                 echo json_encode(['success' => true, 'message' => 'Fee records created successfully']);
             } else {
-                echo json_encode(['success' => false, 'message' => 'Fee records already exist for this student']);
+                http_response_code(500);
+                echo json_encode(['success' => false, 'message' => 'Failed to create fee records']);
             }
             break;
             
         default:
             http_response_code(400);
             echo json_encode(['success' => false, 'message' => 'Invalid action']);
-            break;
     }
-    
 } catch (Exception $e) {
     http_response_code(500);
     echo json_encode(['success' => false, 'message' => 'Error: ' . $e->getMessage()]);
 }
-?>

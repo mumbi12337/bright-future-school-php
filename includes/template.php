@@ -6,7 +6,7 @@
   <title><?php echo isset($page_title) ? $page_title : 'Bright Future Primary School'; ?></title>
   
   <!-- CSS -->
-  <link rel="stylesheet" href="/public/css/styles.css">
+  <link rel="stylesheet" href="../public/css/styles.css?v=<?php echo md5_file(__DIR__ . '/../public/css/styles.css'); ?>">
   
   <?php if (isset($extra_css)): ?>
     <?php foreach ($extra_css as $css): ?>
@@ -38,7 +38,7 @@
         </nav>
 
         <!-- Portal Button -->
-        <a href="/auth/login.php" class="portal-btn">Portal</a>
+        <a href="../login.php" class="portal-btn">Portal</a>
       </div>
     </div>
   </header>
@@ -89,8 +89,8 @@
   </footer>
 
   <!-- JavaScript -->
-  <script src="/public/js/api.js"></script>
-  <script src="/public/js/main.js"></script>
+  <script src="../public/js/api.js"></script>
+  <script src="../public/js/main.js"></script>
   
   <?php if (isset($extra_js)): ?>
     <?php foreach ($extra_js as $js): ?>
